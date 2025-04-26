@@ -1,0 +1,2 @@
+/*
+  Content-Security-Policy: frame-ancestors 'self' https://yodl.me https://*.vercel.app https://*.netlify.app https://*.github.io *; 

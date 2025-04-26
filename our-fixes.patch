@@ -1,0 +1,340 @@
+diff --git a/src/components/PaymentBridge.tsx b/src/components/PaymentBridge.tsx
+index 76ed9dc..7448520 100644
+--- a/src/components/PaymentBridge.tsx
++++ b/src/components/PaymentBridge.tsx
+@@ -99,40 +99,7 @@ const PaymentBridge: React.FC = () => {
+         } catch (e) {
+           console.error("PaymentBridge: Error processing payment message:", e);
+         }
+-      } 
+-      // Add handler for webhook-style callback message from parent (Yodl)
+-      else if (event.data && typeof event.data === 'object' && 
+-               event.data.type === 'yodl_webhook_callback' &&
+-               event.data.paymentData) {
+-        // Process webhook-style payment completion
+-        console.log('PaymentBridge: Received webhook callback:', event.data);
+-        try {
+-          const { paymentData } = event.data;
+-          const { txHash, chainId, orderId } = paymentData;
+-          
+-          if (!txHash || !orderId) {
+-            console.error('PaymentBridge: Missing required payment data in webhook callback');
+-            return;
+-          }
+-          
+-          // Convert to standard payment_complete format and reuse existing logic
+-          const standardizedMessage = {
+-            type: 'payment_complete',
+-            txHash,
+-            chainId,
+-            orderId
+-          };
+-          
+-          // Dispatch internally to reuse the payment_complete handler
+-          window.dispatchEvent(new MessageEvent('message', {
+-            data: standardizedMessage
+-          }));
+-          
+-        } catch (e) {
+-          console.error('PaymentBridge: Error processing webhook callback:', e);
+-        }
+-      }
+-      else if (event.data && typeof event.data === 'object' && !event.data.target && event.data.txHash) {
++      } else if (event.data && typeof event.data === 'object' && !event.data.target && event.data.txHash) {
+          // Log other potential messages with txHash for debugging, but don't act on them unless type is 'payment_complete'
+          console.log('PaymentBridge: Received message with txHash but type is not payment_complete:', event.data);
+       }
+@@ -143,46 +110,15 @@ const PaymentBridge: React.FC = () => {
+ 
+     // Handle Yodl iframe specific communication
+     if (isInIframe) {
+-      // Let parent know this app is ready to handle payments and webhooks
++      // Let parent know this app is ready to handle payments
+       try {
+-        window.parent.postMessage({ 
+-          type: 'yapp_ready',
+-          supports: ['webhooks', 'payment_complete']
+-        }, '*');
+-        console.log('PaymentBridge: Notified parent window that Yapp is ready for webhooks');
++        window.parent.postMessage({ type: 'yapp_ready' }, '*');
++        console.log('PaymentBridge: Notified parent window that Yapp is ready');
+       } catch (e) {
+         console.error('PaymentBridge: Error notifying parent window of readiness:', e);
+       }
+     }
+ 
+-    // Also check URL parameters on load for webhook-style callbacks
+-    const searchParams = new URLSearchParams(window.location.search);
+-    const webhookTxHash = searchParams.get('webhook_txhash') || searchParams.get('txhash');
+-    const webhookOrderId = searchParams.get('webhook_orderid') || searchParams.get('orderid') || searchParams.get('memo');
+-    const webhookChainId = searchParams.get('webhook_chainid') || searchParams.get('chainid');
+-    
+-    if (webhookTxHash && webhookOrderId) {
+-      console.log('PaymentBridge: Detected webhook parameters in URL');
+-      try {
+-        // Convert to standard payment_complete format and reuse existing logic
+-        const standardizedMessage = {
+-          type: 'payment_complete',
+-          txHash: webhookTxHash,
+-          chainId: webhookChainId ? parseInt(webhookChainId, 10) : undefined,
+-          orderId: webhookOrderId
+-        };
+-        
+-        // Trigger our handler with this data
+-        setTimeout(() => {
+-          window.dispatchEvent(new MessageEvent('message', {
+-            data: standardizedMessage
+-          }));
+-        }, 500); // Small delay to ensure everything is loaded
+-      } catch (e) {
+-        console.error('PaymentBridge: Error processing URL webhook parameters:', e);
+-      }
+-    }
+-
+     // Cleanup
+     return () => {
+       console.log("PaymentBridge: Removing message listener.");
+diff --git a/src/components/ProductCard.tsx b/src/components/ProductCard.tsx
+index 583c95b..7544771 100644
+--- a/src/components/ProductCard.tsx
++++ b/src/components/ProductCard.tsx
+@@ -38,23 +38,6 @@ const ProductCard = ({
+   const productData: Product = { id, name, description, price, currency, emoji, inStock, paymentAddress, seller };
+ 
+   const isAvailable = inStock === true || inStock === "infinite";
+-  
+-  // Add ethAddress fallback for each test product
+-  // These will be used if ENS resolution fails
+-  const ethAddressFallbacks: Record<string, string> = {
+-    '1': '0x742d35Cc6634C0532925a3b844Bc454e4438f44e', // Shirt product fallback
+-    '2': '0x742d35Cc6634C0532925a3b844Bc454e4438f44e', // Hat product fallback 
+-    '3': '0x742d35Cc6634C0532925a3b844Bc454e4438f44e'  // Generic fallback for other products
+-  };
+-  
+-  const handleCheckout = () => {
+-    // Add the fallback eth address to ensure ENS failures don't block payment
+-    const productWithFallback = {
+-      ...productData,
+-      ethAddressFallback: ethAddressFallbacks[id] || ethAddressFallbacks['3']
+-    };
+-    onCheckout(productWithFallback);
+-  };
+ 
+   return (
+     <Card className="flex w-full max-w-full flex-col rounded-xl border border-pixelGray bg-pixelWhite shadow-sm dark:border-pixelGreen dark:bg-pixelBlack">
+@@ -85,7 +68,7 @@ const ProductCard = ({
+       </CardContent>
+       <CardFooter className="px-4 pb-4 pt-2">
+         <Button
+-          onClick={handleCheckout}
++          onClick={() => onCheckout(productData)}
+           className={`w-full rounded-xl py-2 text-base font-semibold shadow-sm
+             ${isAvailable ? 'bg-pixelGreen text-pixelBlack hover:bg-pixelYellow dark:bg-pixelGreen dark:hover:bg-pixelYellow' : 'cursor-not-allowed bg-pixelGray text-pixelGray dark:bg-[#232f1e] dark:text-pixelGray'}`}
+           disabled={!isAvailable}
+diff --git a/src/contexts/YodlContext.tsx b/src/contexts/YodlContext.tsx
+index cdbb16f..a6d0087 100644
+--- a/src/contexts/YodlContext.tsx
++++ b/src/contexts/YodlContext.tsx
+@@ -16,7 +16,6 @@ interface YodlContextType {
+     metadata?: Record<string, any>;
+     redirectUrl?: string;
+     paymentAddress?: string;
+-    ethAddressFallback?: string;
+   }) => Promise<Payment | null>;
+   isInIframe: boolean;
+   merchantAddress: string;
+@@ -218,43 +217,17 @@ export const YodlProvider: React.FC<YodlProviderProps> = ({ children }) => {
+     metadata?: Record<string, any>;
+     redirectUrl?: string;
+     paymentAddress?: string;
+-    ethAddressFallback?: string;
+   }): Promise<Payment | null> => {
+     try {
+-      // Get the recipient address, with fallbacks for ENS resolution failure
+-      let recipientIdentifier =
++      // Prefer explicit paymentAddress, then metadata.paymentAddress, then fallback
++      const recipientIdentifier =
+         params.paymentAddress ||
+         (params.metadata && params.metadata.paymentAddress) ||
+         merchantEns || merchantAddress;
+-      
+-      // Check if we have a fallback ETH address
+-      const fallbackAddress = params.ethAddressFallback || 
+-                             (params.metadata && params.metadata.ethAddressFallback);
+-      
+-      // Safety check for valid recipient
+       if (!recipientIdentifier || typeof recipientIdentifier !== 'string' || recipientIdentifier.length < 8) {
+-        console.warn('[Yodl] Invalid primary recipient:', recipientIdentifier);
+-        
+-        // If we have a fallback address, use it
+-        if (fallbackAddress && typeof fallbackAddress === 'string' && fallbackAddress.length >= 42) {
+-          console.log('[Yodl] Using fallback ETH address instead:', fallbackAddress);
+-          recipientIdentifier = fallbackAddress;
+-        } else {
+-          console.error('[Yodl] No valid address or fallback found:', { recipientIdentifier, fallbackAddress, params });
+-          throw new Error('Invalid or missing payment address for this product. Please contact support.');
+-        }
+-      }
+-      
+-      // Check if recipient looks like an ENS name, and we have a fallback
+-      const isEnsName = recipientIdentifier.includes('.eth') || recipientIdentifier.includes('.id');
+-      if (isEnsName && fallbackAddress && typeof fallbackAddress === 'string' && fallbackAddress.length >= 42) {
+-        console.log('[Yodl] Using direct ETH address instead of ENS to avoid resolution errors:', { 
+-          originalEns: recipientIdentifier, 
+-          usingAddress: fallbackAddress 
+-        });
+-        recipientIdentifier = fallbackAddress;
++        console.error('[Yodl] Invalid or missing recipient address/ENS:', recipientIdentifier, params);
++        throw new Error('Invalid or missing payment address for this product. Please contact support.');
+       }
+-      
+       if (!params.amount || typeof params.amount !== 'number' || params.amount <= 0) {
+         console.error('[Yodl] Invalid payment amount:', params.amount, params);
+         throw new Error('Invalid payment amount.');
+@@ -263,143 +236,29 @@ export const YodlProvider: React.FC<YodlProviderProps> = ({ children }) => {
+         console.error('[Yodl] Invalid payment currency:', params.currency, params);
+         throw new Error('Invalid payment currency.');
+       }
+-      
+-      // Generate confirmation URL that will work with direct navigation
+-      const confirmationUrl = generateConfirmationUrl(params.orderId);
+-      console.log("[Yodl] Generated confirmation URL:", confirmationUrl);
+-      
+-      // Save order details in localStorage so confirmation page can pick it up
+-      const orderDetails = {
+-        orderId: params.orderId,
+-        name: params.description,
+-        price: params.amount,
+-        currency: params.currency,
+-        timestamp: new Date().toISOString(),
+-        ...params.metadata
+-      };
+-      localStorage.setItem(params.orderId, JSON.stringify(orderDetails));
+-      console.log("[Yodl] Saved order details to localStorage:", orderDetails);
+-      
+-      // Create a promise that will resolve when the payment is complete
+-      // This is critical for iframe communication scenario
+-      let paymentCompleteResolver: (payment: Payment) => void;
+-      const paymentCompletePromise = new Promise<Payment>((resolve) => {
+-        paymentCompleteResolver = resolve;
+-      });
+-      
+-      // Set up a message listener to receive completion from the Yodl SDK
+-      const messageListener = (event: MessageEvent) => {
+-        // Filter out messages that don't have payment info
+-        if (!event.data || typeof event.data !== 'object') return;
+-        if (!event.data.txHash) return;
+-        
+-        console.log('[Yodl] Received message in payment handler:', event.data);
+-        
+-        // Check if this is a payment completion message that matches our current order
+-        const matchesOrder = event.data.orderId === params.orderId || 
+-                          event.data.memo === params.orderId ||
+-                          event.data.memo === params.memo;
+-        
+-        if (matchesOrder && event.data.txHash) {
+-          console.log('[Yodl] Payment completion message received for this order');
+-          
+-          // Standardize the payment data
+-          const payment: Payment = {
+-            txHash: event.data.txHash,
+-            chainId: event.data.chainId
+-          };
+-          
+-          // Save payment info to localStorage
+-          localStorage.setItem(`payment_${params.orderId}`, JSON.stringify(payment));
+-          
+-          // Create the full confirmation URL with txHash
+-          const url = new URL(confirmationUrl, window.location.origin);
+-          url.searchParams.set('txHash', payment.txHash);
+-          if (payment.chainId) {
+-            url.searchParams.set('chainId', payment.chainId.toString());
+-          }
+-          
+-          console.log('[Yodl] Navigating to confirmation URL:', url.toString());
+-          
+-          // Navigate to the confirmation page
+-          window.location.href = url.toString();
+-          
+-          // Resolve the payment promise
+-          paymentCompleteResolver(payment);
+-          
+-          // Remove this listener since we're done
+-          window.removeEventListener('message', messageListener);
+-        }
+-      };
+-      
+-      // Add the listener before making the payment request
+-      window.addEventListener('message', messageListener);
+-      
++      const redirectUrl = params.redirectUrl || generateConfirmationUrl(params.orderId);
+       const paymentOptions = {
+         addressOrEns: recipientIdentifier,
+         amount: params.amount,
+         currency: params.currency as FiatCurrency,
+         memo: params.memo || params.orderId,
+         metadata: params.metadata,
+-        redirectUrl: confirmationUrl, // Always use our confirmation URL
++        redirectUrl,
+         flow: 'iframe'
+       };
+       console.log('[Yodl] Requesting payment with options:', paymentOptions);
+       logDebug('Requesting payment with options:', paymentOptions);
+-      
+       // Handle preferred flow based on device/context
+       let flow = 'iframe';
+-      
+       // Use redirect flow for mobile/touch devices and when already in an iframe
+       if (isMobile || isTouch || isInIframeValue) {
+         flow = 'redirect';
+         logDebug(`Using redirect flow due to: mobile=${isMobile}, touch=${isTouch}, iframe=${isInIframeValue}`);
+       }
+       paymentOptions.flow = flow;
+-      
+-      // Make the payment request
+       const payment = await yodl.requestPayment(paymentOptions);
+       logDebug('Payment created/requested:', payment);
+-      
+-      // If we get a payment result directly, use it
+-      if (payment && payment.txHash) {
+-        console.log('[Yodl] Direct payment result received:', payment);
+-        
+-        // Save to localStorage
+-        localStorage.setItem(`payment_${params.orderId}`, JSON.stringify(payment));
+-        
+-        // Create the full confirmation URL
+-        const url = new URL(confirmationUrl, window.location.origin);
+-        url.searchParams.set('txHash', payment.txHash);
+-        if (payment.chainId) {
+-          url.searchParams.set('chainId', payment.chainId.toString());
+-        }
+-        
+-        console.log('[Yodl] Navigating to confirmation URL:', url.toString());
+-        
+-        // Navigate to the confirmation page
+-        setTimeout(() => {
+-          window.location.href = url.toString();
+-        }, 300);
+-        
+-        // Clean up the message listener
+-        window.removeEventListener('message', messageListener);
+-        
+-        return payment;
+-      }
+-      
+-      // If we're here, the payment flow is async (iframe)
+-      // Wait for the payment to complete via message, or timeout after 5 minutes
+-      const timeoutPromise = new Promise<null>((resolve) => {
+-        setTimeout(() => {
+-          window.removeEventListener('message', messageListener);
+-          resolve(null);
+-        }, 5 * 60 * 1000); // 5 minutes
+-      });
+-      
+-      // Race the payment completion against timeout
+-      const result = await Promise.race([paymentCompletePromise, timeoutPromise]);
+-      return result;
++      return payment;
+     } catch (error) {
+       console.error('Error creating payment:', error);
+       if (typeof window !== 'undefined') {

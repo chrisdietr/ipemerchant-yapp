@@ -1,0 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Share+Tech+Mono&display=swap');
+
+body, html, #root {
+  font-family: 'Orbitron', 'Share Tech Mono', 'Montserrat', 'sans-serif';
+}
