@@ -14,7 +14,6 @@ import { YodlProvider, useYodl } from './contexts/YodlContext';
 import Home from "./components/home";
 import OrderConfirmation from "./components/OrderConfirmation";
 import PaymentBridge from "./components/PaymentBridge";
-import routes from "tempo-routes";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { Analytics } from "@vercel/analytics/react";
@@ -90,7 +89,6 @@ function AppContent() {
           <Route path="/" element={<Home />} />
           <Route path="/confirmation" element={<OrderConfirmation />} />
         </Routes>
-        {import.meta.env.VITE_TEMPO === "true" && useRoutes(routes)}
       </div>
     </Suspense>
   );

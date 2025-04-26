@@ -30,8 +30,8 @@ dist-ssr
 
 !node_modules/.vite
 
-**/tempobook/dynamic/
-**/tempobook/storyboards/
+**/tempo/dynamic/
+**/tempo/storyboards/
 
 core
 

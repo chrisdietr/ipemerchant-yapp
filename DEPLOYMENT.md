@@ -187,9 +187,8 @@ The application uses the following environment variables:
 
 - `VITE_ADMIN_CONFIG`: JSON string containing admin wallet information
 - `VITE_SHOP_CONFIG`: JSON string containing shop and product information
-- `VITE_WALLETCONNECT_PROJECT_ID`: Your WalletConnect project ID (get from [WalletConnect Cloud](https://cloud.walletconnect.com/))
+- `VITE_WALLET_CONNECT_PROJECT_ID`: Your WalletConnect project ID (get from [WalletConnect Cloud](https://cloud.walletconnect.com/))
 - `VITE_BASE_URL`: Base URL for production deployments (optional)
-- `VITE_TEMPO`: Feature flag for enabling Tempo devtools (optional)
 
 ### Security Best Practices
 
