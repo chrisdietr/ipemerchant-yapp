@@ -127,7 +127,7 @@ const Home = () => {
       {/* Line separator and Products title */}
       <div className="flex w-full flex-col items-start px-4 md:px-8">
         <hr className="my-4 w-full border-t-2 border-pixelYellow/80" />
-        <h2 className="mb-6 text-xl font-extrabold tracking-wide text-pixelYellow drop-shadow-lg sm:text-2xl" data-component-name="Home" style={{ marginLeft: 0 }}>Products</h2>
+        <h2 className="mb-6 text-xl font-extrabold tracking-wide text-pixelYellow drop-shadow-lg sm:text-2xl" data-component-name="Home" style={{ marginLeft: 0 }}>Merchants</h2>
       </div>
       <main className="mx-auto w-full flex-1 px-4 md:px-8" style={{ background: 'transparent' }}>
         <div className="my-3 flex w-full flex-col gap-1">
@@ -143,6 +143,7 @@ const Home = () => {
                 <h2 className="mb-5 flex max-w-full items-center gap-2 truncate text-lg font-extrabold text-white drop-shadow-lg sm:text-xl" data-component-name="Home">
                   {cat.emoji ? <span className="text-xl leading-none sm:text-2xl">{cat.emoji}</span> : null}{cat.name}
                 </h2>
+                {cat.description && <p className="mb-4 text-sm text-gray-400 [&_a]:underline" dangerouslySetInnerHTML={{ __html: cat.description }} />}
                 <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 md:gap-6 xl:grid-cols-4">
                   {productsForCat.map(product => (
                     <ProductCard
@@ -156,6 +157,7 @@ const Home = () => {
                       inStock={product.inStock}
                       paymentAddress={product.paymentAddress}
                       seller={product.seller}
+                      sellerTelegram={product.sellerTelegram}
                       onCheckout={handleInitiateCheckout}
                     />
                   ))}

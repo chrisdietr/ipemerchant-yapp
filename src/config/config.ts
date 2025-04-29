@@ -18,6 +18,7 @@ const adminConfigSchema = z.object({
 const categorySchema = z.object({
   id: z.string(),
   name: z.string(),
+  description: z.string().optional(),
   emoji: z.string().optional(),
 });
 

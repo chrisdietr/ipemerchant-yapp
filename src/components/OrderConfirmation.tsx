@@ -108,14 +108,15 @@ const OrderConfirmation = () => {
             const productPrefix = memo.split('_')[0].toLowerCase();
             matchedProduct = shopConfig.products.find(p =>
               p.id.toLowerCase() === productPrefix ||
-              (p.name && p.name.toLowerCase() === productPrefix)
+              (p.name && p.name.toLowerCase().startsWith(productPrefix))
             );
           }
+          setOrderedProduct(matchedProduct);
           const name = matchedProduct ? matchedProduct.name : '';
           const emoji = matchedProduct ? matchedProduct.emoji : '';
           const price = matchedProduct ? matchedProduct.price : payment.amount || 0;
           const currency = matchedProduct ? matchedProduct.currency : payment.currency || '';
-          const sellerTelegram = matchedProduct ? matchedProduct.sellerTelegram : shopTelegramHandle;
+          const sellerTelegram = matchedProduct?.sellerTelegram;
           setOrderDetails({
             name,
             price,
@@ -239,21 +240,24 @@ const OrderConfirmation = () => {
   const yodlTxUrl = isSuccess ? `https://yodl.me/tx/${urlTxHash}` : '';
 
   // Find the matched product from shopConfig.products
-  const matchedProduct = shopConfig.products.find(p =>
+  const matchedProduct = orderedProduct || shopConfig.products.find(p =>
     p.id.toLowerCase() === orderIdFromUrl?.split('_')[0].toLowerCase() ||
-    (p.name && p.name.toLowerCase() === orderIdFromUrl?.split('_')[0].toLowerCase())
+    (p.name && p.name.toLowerCase().startsWith(orderIdFromUrl?.split('_')[0].toLowerCase()))
   );
 
-  const sellerTelegram = matchedProduct?.sellerTelegram || shopTelegramHandle || adminTelegram;
+  const sellerTelegram = matchedProduct?.sellerTelegram || (matchedProduct ? undefined : shopTelegramHandle);
 
+  const shopName = shopConfig.shops[0]?.name || 'your shop';
+  const messageText = [
+    `Hey, I just bought ${orderDetails?.name} from ${shopName}.`,
+    '',
+    'Where can I pick it up?',
+    '',
+    `Here is the receipt: https://yodl.me/tx/${urlTxHash}`
+  ].join('\n');
+  
   const telegramMessage = isSuccess && orderDetails && sellerTelegram
-    ? encodeURIComponent([
-        `Hey, I just bought ${orderDetails.name} from ${shopConfig.shops[0]?.name || 'your shop'}.`,
-        '',
-        'Where can I pick it up?',
-        '',
-        `Here is the receipt: https://yodl.me/tx/${urlTxHash}`
-      ].join('\n'))
+    ? encodeURIComponent(messageText)
     : '';
 
   const telegramLink = sellerTelegram

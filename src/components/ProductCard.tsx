@@ -20,6 +20,7 @@ interface ProductCardProps {
   inStock: boolean | "infinite";
   paymentAddress?: string;
   seller?: string;
+  sellerTelegram?: string;
   onCheckout: (product: Product) => void;
 }
 
@@ -33,9 +34,10 @@ const ProductCard = ({
   inStock,
   paymentAddress,
   seller,
+  sellerTelegram,
   onCheckout,
 }: ProductCardProps) => {
-  const productData: Product = { id, name, description, price, currency, emoji, inStock, paymentAddress, seller };
+  const productData: Product = { id, name, description, price, currency, emoji, inStock, paymentAddress, seller, sellerTelegram };
 
   const isAvailable = inStock === true || inStock === "infinite";
   
@@ -56,6 +58,9 @@ const ProductCard = ({
     onCheckout(productWithFallback);
   };
 
+  const telegramMessage = encodeURIComponent(`I have a question about your product: ${name}`);
+  const telegramLink = sellerTelegram ? `https://t.me/${sellerTelegram}?text=${telegramMessage}` : '#';
+
   return (
     <Card className="flex w-full max-w-full flex-col rounded-xl border border-pixelGray bg-pixelWhite shadow-sm dark:border-pixelGreen dark:bg-pixelBlack">
       <CardHeader className="flex flex-col gap-2 px-4 pb-2 pt-4">
@@ -71,10 +76,20 @@ const ProductCard = ({
         </div>
         <CardDescription className="min-h-8 text-sm text-pixelGray dark:text-pixelGray">{description}</CardDescription>
         {/* Seller info: always reserve space for consistent layout */}
-        <div className="my-1 flex min-h-5 items-center">
+        <div className="my-1 flex min-h-5 items-center justify-between">
           {seller ? (
             <span className="text-xs italic text-pixelGray dark:text-pixelGray">Seller: {seller}</span>
           ) : null}
+          {sellerTelegram && (
+            <a
+              href={telegramLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-pixelGreen hover:text-pixelYellow dark:text-pixelGreen dark:hover:text-pixelYellow"
+            >
+              Contact Seller
+            </a>
+          )}
         </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-2 px-4 pb-2">
