@@ -90,7 +90,7 @@ const OrderConfirmation = () => {
 
     let retryTimeout: NodeJS.Timeout | null = null;
     let attempts = 0;
-    const maxAttempts = 6; // Try for ~30s (6*5s)
+    const maxAttempts = 40; // 10 seconds (40 * 250ms)
 
     const fetchPayment = async () => {
       try {
@@ -101,51 +101,147 @@ const OrderConfirmation = () => {
           payment = details.payment || details;
         }
         if (payment) {
+          // --- Check if payment is confirmed/arrived ---
+          const isConfirmed =
+            (payment.status && payment.status.toLowerCase() === 'confirmed') ||
+            payment.blockTimestamp ||
+            payment.timestamp;
+          if (!isConfirmed) {
+            setIsLoading(true);
+            setError(null);
+            if (attempts < maxAttempts) {
+              attempts++;
+              retryTimeout = setTimeout(fetchPayment, 250); // Poll every 250ms until confirmed
+            } else {
+              setOrderDetails(null);
+              setOrderId('');
+              setError('Payment not confirmed after 10 seconds. Please check your transaction or try again.');
+              setIsLoading(false);
+            }
+            return;
+          }
+          // Only after confirmation:
           const memo = payment.memo || '';
           setOrderId(memo);
-          let matchedProduct = null;
-          if (memo && shopConfig && Array.isArray(shopConfig.products)) {
-            const productPrefix = memo.split('_')[0].toLowerCase();
-            matchedProduct = shopConfig.products.find(p =>
-              p.id.toLowerCase() === productPrefix ||
-              (p.name && p.name.toLowerCase().startsWith(productPrefix))
-            );
+          // --- Fetch order details from localStorage using memo ---
+          let storedOrder = null;
+          try {
+            const stored = localStorage.getItem(memo);
+            if (stored) {
+              storedOrder = JSON.parse(stored);
+            }
+          } catch (e) {
+            // ignore JSON parse errors
           }
-          setOrderedProduct(matchedProduct);
-          const name = matchedProduct ? matchedProduct.name : '';
-          const emoji = matchedProduct ? matchedProduct.emoji : '';
-          const price = matchedProduct ? matchedProduct.price : payment.amount || 0;
-          const currency = matchedProduct ? matchedProduct.currency : payment.currency || '';
-          const sellerTelegram = matchedProduct?.sellerTelegram;
+          if (!storedOrder) {
+            setError('Could not find order details in your browser for this payment. Please try again from the same device.');
+            setIsLoading(false);
+            return;
+          }
+          // Use storedOrder for product info and validation
+          const name = storedOrder.name;
+          const emoji = storedOrder.emoji;
+          const price = storedOrder.price;
+          const currency = storedOrder.currency;
+          const sellerTelegram = storedOrder.sellerTelegram;
+          setOrderedProduct({
+            id: storedOrder.productId,
+            name,
+            description: storedOrder.description || '',
+            price,
+            currency,
+            emoji,
+            inStock: true,
+            category: storedOrder.category || '',
+            paymentAddress: storedOrder.paymentAddress,
+            seller: storedOrder.seller,
+            sellerTelegram,
+          });
+          // --- ENS Subdomain Check ---
+          function isEnsSubdomain(address) {
+            return typeof address === 'string' && 
+              address.endsWith('.eth') && 
+              address.split('.').length > 2;
+          }
+          // Amount: allow higher, but not lower
+          const paymentAmount = Number(payment.amount);
+          const productPrice = Number(price);
+          if (!isNaN(paymentAmount) && !isNaN(productPrice) && paymentAmount < productPrice) {
+            setError(`Payment amount (${paymentAmount}) is less than product price (${productPrice}).`);
+            setIsLoading(false);
+            return;
+          }
+          // Currency: must match
+          if (
+            typeof payment.currency !== 'undefined' &&
+            payment.currency !== currency
+          ) {
+            setError(
+              `Payment currency (${payment.currency}) does not match product currency (${currency}).`
+            );
+            setIsLoading(false);
+            return;
+          }
+          // Recipient address: must be ENS subdomain and match if both present
+          const expectedRecipient = storedOrder.paymentAddress?.toLowerCase() || merchantAddress?.toLowerCase();
+          const paymentRecipient = (payment.to || payment.toAddress || payment.receiver || payment.addressOrEns || '').toLowerCase();
+          if (!isEnsSubdomain(expectedRecipient)) {
+            setError(`Expected recipient is not an ENS subdomain: ${expectedRecipient}`);
+            setIsLoading(false);
+            return;
+          }
+          if (expectedRecipient !== paymentRecipient) {
+            setError(`Payment recipient (${paymentRecipient}) does not match expected ENS subdomain (${expectedRecipient}).`);
+            setIsLoading(false);
+            return;
+          }
+          // 2. Memo/orderId must match exactly
+          if (memo !== orderIdFromUrl) {
+            setError(`Payment memo/orderId (${memo}) does not match expected orderId (${orderIdFromUrl}).`);
+            setIsLoading(false);
+            return;
+          }
+          // 3. Chain/network must match (if you have a required chainId)
+          const requiredChainId = 1; // Example: Ethereum mainnet
+          if (payment.chainId && payment.chainId !== requiredChainId) {
+            setError(`Payment was made on the wrong network (chainId: ${payment.chainId}).`);
+            setIsLoading(false);
+            return;
+          }
           setOrderDetails({
             name,
             price,
             currency,
             emoji,
             timestamp: payment.blockTimestamp || payment.timestamp || '',
-            sellerTelegram
+            sellerTelegram,
           });
           setTransactionDetails(payment);
+          setWarning(null);
           setIsLoading(false);
         } else {
           if (attempts < maxAttempts) {
             attempts++;
-            retryTimeout = setTimeout(fetchPayment, 5000); // Retry in 5s
+            retryTimeout = setTimeout(fetchPayment, 250); // Retry in 250ms
           } else {
             setOrderDetails(null);
             setOrderId('');
-            setError('Could not fetch transaction/payment details after multiple attempts. Please check your transaction hash or try again later.');
+            setError(
+              'Could not fetch transaction/payment details after multiple attempts. Please check your transaction hash or try again later.'
+            );
             setIsLoading(false);
           }
         }
       } catch (fetchErr) {
         if (attempts < maxAttempts) {
           attempts++;
-          retryTimeout = setTimeout(fetchPayment, 5000); // Retry in 5s
+          retryTimeout = setTimeout(fetchPayment, 250); // Retry in 250ms
         } else {
           setOrderDetails(null);
           setOrderId('');
-          setError('Error fetching transaction details after multiple attempts. Please check your connection or try again.');
+          setError(
+            'Error fetching transaction details after multiple attempts. Please check your connection or try again.'
+          );
           setIsLoading(false);
         }
       }
