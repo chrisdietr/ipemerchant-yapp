@@ -44,22 +44,50 @@ const Home = () => {
     }
     setIsProcessingPayment(product.id);
 
-    // --- Generate a 6-digit, non-repeating memo/orderId across all devices without a DB ---
-    // Use a hash of product name + current UTC date + time + a random salt
-    // This narrows collision probability to near zero and is deterministic for the same input
-    function hashStringTo6Digit(str: string): string {
+    // --- Generate unique memo/orderId using maximum available space within 32 bytes ---
+    function hashStringTo5Digit(str: string): string {
       let hash = 5381;
       for (let i = 0; i < str.length; i++) {
-        hash = ((hash << 5) + hash) + str.charCodeAt(i); // hash * 33 + c
+        hash = ((hash << 5) + hash) + str.charCodeAt(i);
       }
-      return Math.abs(hash % 1_000_000).toString().padStart(6, '0');
+      return Math.abs(hash % 100000).toString().padStart(5, '0');
     }
+
+    // Create meaningful name using maximum available space (32 bytes - 6 bytes for _XXXXX = 26 bytes)
+    const createMaxName = (name: string): string => {
+      const MAX_NAME_LENGTH = 26; // 32 bytes - 5 for hash - 1 for underscore
+      const words = name.split(/\s+/);
+      
+      // If total length is already under limit, just clean it
+      if (name.length <= MAX_NAME_LENGTH) {
+        return name.replace(/[^a-zA-Z0-9]/g, '');
+      }
+      
+      // For longer names, try to keep meaningful parts
+      if (words.length > 1) {
+        // Try to keep first letters of all words plus as much of the first word as possible
+        const acronym = words.map(word => word.charAt(0).toUpperCase()).join('');
+        const remainingSpace = MAX_NAME_LENGTH - acronym.length;
+        if (remainingSpace > 0) {
+          // Add as much of the first word as possible
+          const firstWord = words[0].replace(/[^a-zA-Z0-9]/g, '');
+          return (firstWord.slice(0, remainingSpace) + acronym)
+            .slice(0, MAX_NAME_LENGTH);
+        }
+        return acronym.slice(0, MAX_NAME_LENGTH);
+      }
+      
+      // For single long word, just truncate
+      return name.replace(/[^a-zA-Z0-9]/g, '').slice(0, MAX_NAME_LENGTH);
+    };
+
     const now = new Date();
-    // Use UTC date/time down to seconds for uniqueness, plus a random 3-digit salt
-    const salt = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    const base = `${product.name.replace(/\s+/g, '_')}_${now.getUTCFullYear()}${(now.getUTCMonth()+1).toString().padStart(2,'0')}${now.getUTCDate().toString().padStart(2,'0')}${now.getUTCHours().toString().padStart(2,'0')}${now.getUTCMinutes().toString().padStart(2,'0')}${now.getUTCSeconds().toString().padStart(2,'0')}_${salt}`;
-    const sixDigit = hashStringTo6Digit(base);
-    const memo = `${product.name.replace(/\s+/g, '_')}_${sixDigit}`;
+    const salt = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+    const base = `${product.name}_${now.getUTCHours()}${now.getUTCMinutes()}${salt}`;
+    const fiveDigit = hashStringTo5Digit(base);
+    
+    const truncatedName = createMaxName(product.name);
+    const memo = `${truncatedName}_${fiveDigit}`;
     const orderId = memo;
 
     try {
